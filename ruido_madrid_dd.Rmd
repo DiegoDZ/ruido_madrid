@@ -1,0 +1,16 @@
+---
+title: "Análisis del ruido en Madrid"
+output: html_notebook
+---
+
+
+```{r}
+df <- read.csv(file = './data/datos_ruido_madrid.csv', header = FALSE, sep = ';')
+colnames(df) <- c("Station","Year","Month","Day","Period","LAeq","LAS01","LAS10","LAS50","LAS90","LAS99")
+df$Date <- as.Date(with(df, paste(Year, Month, Day,sep="-")), "%Y-%m-%d")
+df[,c("Year","Month","Day")] <- NULL
+df[order(df$Date),]
+head(df)
+```
+
+
