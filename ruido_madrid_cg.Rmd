@@ -3,27 +3,65 @@ title: "Explora ruido madrid"
 output: html_notebook
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
-
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+TODO:
+- promediar mensualmente LeqT para todos los años y comparar con 2020.
+- Estaría bien crear una semana tipo promediada para todos los años que tenemos datos. En este caso habría que tener cuidado en promediar lunes-lunes, martes-martes...
 
 ```{r}
-library(plyr)
+library(dplyr)
 library(reshape2)
+library(magrittr)
+library(lattice)
+library(latticeExtra)
+library(zoo)
 ```
 
 ```{r}
-data <- read.csv("data/datos_ruido_madrid.csv", sep=";")
+data <- read.csv("data/datos_ruido_madrid.csv", sep=";", strip.white = TRUE)
+colnames(data) <- c("Station","Year","Month","Day","Period","LAeq","LAS01","LAS10","LAS50","LAS90","LAS99")
+
+data$Date <- as.Date(with(data, paste(Year, Month, Day, 
+                                      sep="-")), "%Y-%m-%d")
+data <- data[order(data$Date),]
+
 head(data)
 ```
 
+# muestra de datos diarios de una estación Leq
+
 ```{r}
-DF <- data.frame(ID=c('ID3', 'ID2','ID1','ID4'), end=c('4/1/10 12:00', '6/1/11 14:20', '1/1/09 11:10' , '1/1/09 13:11'), age=c(40,30,20,20));
-DF$DTime <- as.POSIXct( DF$end , format = "%d/%m/%y %H:%M" , tz =(DF[,2])
-DF[ order(DF$DTime , decreasing = TRUE ),]
+xyplot(LAeq~Date|as.factor(Station[1]), groups=Period, data=data[data$Period == "T",], type='l',strip = FALSE)
+```
+
+Media mensual de todos los años excepto 2020
+
+
+```{r}
+data %>%
+  filter(Year != 2020) %>%
+  group_by(Month) %>%
+  summarise(mean_LAeq = mean(LAeq),
+            mean_LAS01 = mean(LAS01),
+            mean_LAS10 = mean(LAS10),
+            mean_LAS50 = mean(LAS50),
+            mean_LAS90 = mean(LAS90),
+            mean_LAS99 = mean(LAS99)) 
 ```
 
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+Año 2020
+```{r}
+data %>% 
+  filter(Year == 2020) %>%
+  filter(Period == "T") %>%
+  group_by(Month) %>%
+  summarise(mean_LAeq = mean(LAeq),
+            mean_LAS01 = mean(LAS01),
+            mean_LAS10 = mean(LAS10),
+            mean_LAS50 = mean(LAS50),
+            mean_LAS90 = mean(LAS90),
+            mean_LAS99 = mean(LAS99)) 
+  
+```
 
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
