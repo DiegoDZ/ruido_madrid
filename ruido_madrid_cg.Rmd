@@ -6,7 +6,7 @@ output: html_notebook
 TODO:
 - promediar mensualmente LeqT para todos los años y comparar con 2020.
 - Estaría bien crear una semana tipo promediada para todos los años que tenemos datos. En este caso habría que tener cuidado en promediar lunes-lunes, martes-martes...
-
+ 
 ```{r}
 library(dplyr)
 library(reshape2)
@@ -14,30 +14,27 @@ library(magrittr)
 library(lattice)
 library(latticeExtra)
 library(zoo)
+library(ggplot2)
 ```
-
+ 
 ```{r}
-data <- read.csv("data/datos_ruido_madrid.csv", sep=";", strip.white = TRUE)
-colnames(data) <- c("Station","Year","Month","Day","Period","LAeq","LAS01","LAS10","LAS50","LAS90","LAS99")
-
-data$Date <- as.Date(with(data, paste(Year, Month, Day, 
+df <- read.csv("data/datos_ruido_madrid.csv", sep=";", strip.white = TRUE)
+colnames(df) <- c("Station","Year","Month","Day","Period","LAeq","LAS01","LAS10","LAS50","LAS90","LAS99")
+df$Date <- as.Date(with(df, paste(Year, Month, Day, 
                                       sep="-")), "%Y-%m-%d")
-data <- data[order(data$Date),]
-
-head(data)
+df <- df[order(df$Date),]
+head(df)
 ```
 
 # muestra de datos diarios de una estación Leq
 
 ```{r}
-xyplot(LAeq~Date|as.factor(Station[1]), groups=Period, data=data[data$Period == "T",], type='l',strip = FALSE)
+xyplot(LAeq~Date|as.factor(Station[1]), groups=Period, df=df[df$Period == "T",], type='l',strip = FALSE)
 ```
 
-Media mensual de todos los años excepto 2020
-
-
+# Media mensual de todos los años excepto 2020
 ```{r}
-data %>%
+df %>%
   filter(Year != 2020) %>%
   group_by(Month) %>%
   summarise(mean_LAeq = mean(LAeq),
@@ -48,10 +45,10 @@ data %>%
             mean_LAS99 = mean(LAS99)) 
 ```
 
-
-Año 2020
+ 
+# Año 2020
 ```{r}
-data %>% 
+df %>% 
   filter(Year == 2020) %>%
   filter(Period == "T") %>%
   group_by(Month) %>%
@@ -64,4 +61,81 @@ data %>%
   
 ```
 
+
+```{r}
+## número de estaciones
+ns <-  unique(data$Station)
+```
+
+Nombre de las estaciones
+```{r}
+sdf <- read.csv("data/EstacionesMedidaControlAcustico.csv", header=FALSE, sep=",", fileEncoding="ISO-8859-1")
+names(sdf)[1] <- "Station"
+```
+
+Uno los dos data frames
+```{r}
+df <- merge(df, sdf, by="Station")
+```
+
+## Gráficas generales:
+
+```{r}
+## set the minimal set for the graphs
+theme_set(
+  theme_minimal() +
+    theme(legend.position = "right")
+  )
+```
+ 
+# Media del índice LAeq de todas las estaciones
+
+```{r}
+## set stations as factor.
+df$Station <-  as.factor(df$Station)
+```
+
+
+```{r}
+df %>% 
+  filter(Year != 2020) %>% ## hago la gráfica con datos hasta 2019
+    filter(Period == "T") %>%
+    group_by(V2) %>%
+    summarise(mean_LAeq = mean(LAeq)) %>%
+    ggplot(aes(y=V2, x=mean_LAeq, color=mean_LAeq)) +
+    geom_point(cex=3.5) +
+    scale_color_viridis(option = "D") +
+    labs(y="Estaciones", x = "LAeq")
+```
+
+
+# Boxplot LAeq de todas las estaciones 
+```{r}
+## TO BE IMPROVED
+df %>% 
+  filter(Year != 2020) %>% ## hago la gráfica con datos hasta 2019
+    filter(Period == "T") %>%
+    group_by(V2) %>%
+    ggplot(aes(x=V2, y=LAeq, color=V2)) +
+    geom_boxplot(aes(fill = V2))
+
+```
+
+
+# Todas las estaciones temporal
+```{r}
+## TO BE IMPROVED
+df %>% 
+  filter(Year != 2020) %>% ## hago la gráfica con datos hasta 2019
+    filter(Period == "T") %>%
+    group_by(V2) %>%
+    ggplot(aes(x=Date, y=LAeq, color=V2, alpha=0.3)) +
+    geom_point()
+
+```
+
+Para límites mirar: http://www.madrid.org/bdccm/normativa/PDF/Ruidos%20y%20vibraciones/Compilacion/CPRUID.pdf
+
+área tolerablemente ruidosa: 65/70 diurno (60 nocturno)
+área ruidosa: 70/75 diurno (70 nocturno)
 
