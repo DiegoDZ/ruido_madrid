@@ -1,97 +1,62 @@
 ---
 title: "Análisis del ruido en Madrid"
-output: html_notebook
+output: document_html
 ---
 ```{r}
 library("dplyr")
+library("ggplot2")
+library('gridExtra')
 ```
 
 
 ```{r}
-data <- read.csv(file = './data/datos_ruido_madrid.csv', header = FALSE, sep = ';', strip.white = TRUE)
+df <- read.csv(file = './data/datos_ruido_madrid.csv', header = FALSE, sep = ';', strip.white = TRUE)
 
-colnames(data) <- c("Station","Year","Month","Day","Period","LAeq","LAS01","LAS10","LAS50","LAS90","LAS99")
+colnames(df) <- c("Station","Year","Month","Day","Period","LAeq","LAS01","LAS10","LAS50","LAS90","LAS99")
 
-data$Date <- as.Date(with(data, paste(Year, Month, Day,sep="-")), "%Y-%m-%d")
-# df[,c("Year","Month","Day")] <- NULL
-data <- data[order(data$Date),]
-head(data)
+df$Date <- as.Date(with(df, paste(Year, Month, Day,sep="-")), "%Y-%m-%d")
+
+head(df)
 ```
+
+Calculamos la media de los índices por año, mes, estación y periodo, y añadimos las variables al dataframe.
 
 ```{r}
-#group_by(data,Month).avg()
 
-Lmean_by_month_2015 <- data %>%  group_by(Month) %>% 
-  filter(Year==2015)%>%
-  filter(Period=='T')%>%
-                               summarise(mean_LAeq = mean(LAeq), 
-                                         mean_LAS01 = mean(LAS01),
-                                         mean_LAS10 = mean(LAS10),
-                                         mean_LAS50 = mean(LAS50),
-                                         mean_LAS99 = mean(LAS99)
-                                         )
+meanLAeqByMonthStationAndPeriod <- df %>% 
+    group_by(Year,Month, Station, Period) %>% 
+    summarise(meanLAeqByMonth = mean(LAeq), 
+              meanLAS01ByMonth = mean(LAS01), 
+              meanLAS10ByMonth = mean(LAS10),
+              meanLAS50ByMonth = mean(LAS50),
+              meanLAS90ByMonth = mean(LAS90),
+              meanLAS99ByMonth = mean(LAS99))
 
-Lmean_by_month_2016 <- data %>%  group_by(Month) %>% 
-  filter(Year==2016)%>%
-  filter(Period=='T')%>%
-                               summarise(mean_LAeq = mean(LAeq), 
-                                         mean_LAS01 = mean(LAS01),
-                                         mean_LAS10 = mean(LAS10),
-                                         mean_LAS50 = mean(LAS50),
-                                         mean_LAS99 = mean(LAS99)
-                                         )
+df <- merge(df, meanLAeqByMonthStationAndPeriod, by = c("Year","Month", "Station", "Period"), all.x = TRUE)
 
-Lmean_by_month_2017 <- data %>%  group_by(Month) %>% 
-  filter(Year==2017)%>%
-  filter(Period=='T')%>%
-                               summarise(mean_LAeq = mean(LAeq), 
-                                         mean_LAS01 = mean(LAS01),
-                                         mean_LAS10 = mean(LAS10),
-                                         mean_LAS50 = mean(LAS50),
-                                         mean_LAS99 = mean(LAS99)
-                                         )
+colnames(df)
 
-Lmean_by_month_2018 <- data %>%  group_by(Month) %>% 
-  filter(Year==2018)%>%
-  filter(Period=='T')%>%
-                               summarise(mean_LAeq = mean(LAeq), 
-                                         mean_LAS01 = mean(LAS01),
-                                         mean_LAS10 = mean(LAS10),
-                                         mean_LAS50 = mean(LAS50),
-                                         mean_LAS99 = mean(LAS99)
-                                         )
-
-Lmean_by_month_2019 <- data %>%  group_by(Month) %>% 
-  filter(Year==2019)%>%
-  filter(Period=='T')%>%
-                               summarise(mean_LAeq = mean(LAeq), 
-                                         mean_LAS01 = mean(LAS01),
-                                         mean_LAS10 = mean(LAS10),
-                                         mean_LAS50 = mean(LAS50),
-                                         mean_LAS99 = mean(LAS99)
-                                         )
-
-
-Lmean_by_month_2020 <- data %>%  group_by(Month) %>% 
-  filter(Year==2020)%>%
-  filter(Period=='T')%>%
-                               summarise(mean_LAeq = mean(LAeq), 
-                                         mean_LAS01 = mean(LAS01),
-                                         mean_LAS10 = mean(LAS10),
-                                         mean_LAS50 = mean(LAS50),
-                                         mean_LAS99 = mean(LAS99)
-                                         )
-
+head(df)
 ```
 
+Nos centramos únicamente en el índice LAeq durante el periodo 'T'. Nos interesa conocer la media mensual por año de ese índice para cada una de las estaciones de Madrid. 
 
 ```{r}
-plot(Lmean_by_month_2015$mean_LAeq,type="l",col="red",ylim = c(55,65))
-lines(Lmean_by_month_2016$mean_LAeq,type="l",col="red")
-lines(Lmean_by_month_2017$mean_LAeq,type="l",col="red")
-lines(Lmean_by_month_2018$mean_LAeq,type="l",col="red")
-lines(Lmean_by_month_2019$mean_LAeq,type="l",col="red")
-lines(Lmean_by_month_2020$mean_LAeq,col="green")
+ b <- df %>%  filter(Year==2015) %>% filter(Period == "T")
+
 
 ```
+
+
+```{r, fig.width = 10, fig.height = 20}
+
+ggplot(b, aes(x = Month, y = meanLAeqByMonth)) +
+ geom_point(color="steelblue", size=1)  +
+ geom_line(color="steelblue", size=0.5)  +
+ facet_wrap(~ Station, ncol = 3, scales="free") +
+  labs(title = "Comparación LAeq ",
+       subtitle = "Comparación evolución LAeq promedio años (2015-2019) y 2020 para las distintas estaciones",
+       y = "Media mensual LAeq", x = "Mes")
+```
+
 
