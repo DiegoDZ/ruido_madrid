@@ -44,7 +44,6 @@ Nos centramos únicamente en el índice LAeq durante el periodo 'T'. Nos interes
 ```{r}
  b <- df %>%  filter(Year==2015) %>% filter(Period == "T")
 
-
 ```
 
 
