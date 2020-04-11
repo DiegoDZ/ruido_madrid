@@ -1,11 +1,19 @@
 ---
 title: "Análisis del ruido en Madrid"
-output: document_html
+output: 
+    html_notebook: default 
+    html_document: default
+
 ---
 ```{r}
 library("dplyr")
 library("ggplot2")
 library('gridExtra')
+```
+
+```{r}
+Sys.setlocale("LC_TIME")
+
 ```
 
 
@@ -17,25 +25,33 @@ colnames(df) <- c("Station","Year","Month","Day","Period","LAeq","LAS01","LAS10"
 
 df$Date <- as.Date(with(df, paste(Year, Month, Day,sep="-")), "%Y-%m-%d")
 
+df$MonthName <- months(df$Date)
+
+df$DayMonthName <- with(df, paste(weekdays(df$Date), MonthName,sep="-"))
+
+df$LAS01 <- NULL
+df$LAS10 <- NULL
+df$LAS50 <- NULL
+df$LAS90 <- NULL
+df$LAS99 <- NULL
+
+
 head(df)
 ```
 
 ```{r}
 
-dfs <- read.csv(file = './data/EstacionesMedidaControlAcustico.csv', header = TRUE, sep = ';', strip.white = TRUE, fileEncoding = "ISO-8859-1")
+dfs <- read.csv(file = './data/EstacionesMedidaControlAcustico.csv', header = TRUE, sep = ',', strip.white = TRUE, fileEncoding = "ISO-8859-1")
 
-dfs$COD_VIA <- NULL
-dfs$VIA_CLASE <- NULL
-dfs$VIA_PAR <- NULL
-dfs$VIA_NOMBRE <- NULL
-dfs$Dirección <- NULL
+dfs[ ,c('COD_VIA', 'VIA_CLASE','VIA_PAR','VIA_NOMBRE','Dirección','Longitud_gms','Latitud_gms','LATITUD_ED50','LONGITUD_ED50','Alt..m.','Fecha.alta','Coordenada_X_ETRS89','Coordenada_Y_ETRS89','LONGITUD_WGS84','LATITUD_WGS84','X.2','X.3')] <- list(NULL)
 
 dfs <- dfs %>% 
   rename(
     Station=Nº,
-    NameStation = Nombre
+    StationName = Nombre,
+    Long = X, 
+    Lat = X.1
     )
-
 
 head(dfs)
 
@@ -54,15 +70,10 @@ Calculamos la media de los índices por año, mes, estación y periodo, y añadi
 ```{r}
 
 meanLAeqByMonthStationAndPeriod <- df %>% 
-    group_by(Year,Month, NameStation, Period) %>% 
-    summarise(meanLAeqByMonth = mean(LAeq), 
-              meanLAS01ByMonth = mean(LAS01), 
-              meanLAS10ByMonth = mean(LAS10),
-              meanLAS50ByMonth = mean(LAS50),
-              meanLAS90ByMonth = mean(LAS90),
-              meanLAS99ByMonth = mean(LAS99))
+    group_by(Year,MonthName, StationName, Period) %>% 
+    summarise(meanLAeqByMonth = mean(LAeq))
 
-df <- merge(df, meanLAeqByMonthStationAndPeriod, by = c("Year","Month", "NameStation", "Period"), all.x = TRUE)
+df <- merge(df, meanLAeqByMonthStationAndPeriod, by = c("Year","MonthName", "StationName", "Period"), all.x = TRUE)
 
 colnames(df)
 
@@ -74,7 +85,7 @@ Nos centramos únicamente en el índice LAeq durante el periodo 'T'. Nos interes
 ```{r}
  dfPeriodT <- df %>% filter(Period == "T")
 
-dfMeanLAeqByMonth <- distinct(dfPeriodT, Year, Month, NameStation, meanLAeqByMonth)
+dfMeanLAeqByMonth <- distinct(dfPeriodT, Year, MonthName, StationName, meanLAeqByMonth)
 
 # Year as factor in order to facilitate the choice of colors in the plot
 dfMeanLAeqByMonth$Year <- factor(dfMeanLAeqByMonth$Year)
@@ -83,16 +94,74 @@ dfMeanLAeqByMonth$Year <- factor(dfMeanLAeqByMonth$Year)
 
 
 
-```{r, fig.width = 10, fig.height = 20}
 
-ggplot(dfMeanLAeqByMonth, aes(x = Month, y = meanLAeqByMonth, group=Year)) +
+```{r, fig.width=12, fig.height=8}
+
+ggplot(dfMeanLAeqByMonth, aes(x = ordered(MonthName,levels=month.name), y = meanLAeqByMonth, group=Year)) +
   geom_point(aes(color=Year), size=2)  +
   geom_line(aes(color=Year))  +
-  facet_wrap(~ NameStation, ncol = 3, scales="free") +
+  facet_wrap(~ StationName, ncol = 3, scales="free") +
   labs(title = "Comparación del índice LAeq medido en las distintas estaciones a lo largo de los años",
        subtitle = "Se ha realizado la media mensual de los datos recopilados en cada una de las estaciones",
        y = "Media mensual LAeq") +
  theme(legend.position="top")
 ```
 
+Una vez que hemos visto cómo el efecto de la cuarentena debido al coronavirus se refleja en los niveles de ruido, nos centramos únicamente en el periodo de tiempo durante el cual fueron aplicadas las medidas de confinamiento e hibernación de la economía. Para ello estudiaremos los niveles de ruido con un nivel de descripción semanal. 
+
+Para ello crearemos obtendremos los promedios diarios de los índices de los años 2015-2019 teniendo en cuenta las siguientes premisas: 
+
+1. Los promedios se tienen que realizar no por fecha sino por días (i.e. se promedian los días de la semana de un mismo mes). Así pues, tomaremos, por ejemplo, todos los lunes de un mismo mes de los distintos años para realizar el promedio y obtener un lunes "típico" del mes en cuestión. 
+
+2. Construiremos un mes "típico" para compararlo con el mes correspondiente de 2020. 
+
+3. El efecto de Madrid central observado en la gráfica anterior no va a ser tenido en cuenta ya que vamos a promediar sobre todos los años previos al de la crisis del coronavirus. 
+```{r}
+head(df)
+```
+
+Calculamos la media por día del mes para todos los años comprendidos entre 2015 y 2019 (ambos incluidos).
+
+```{r}
+
+ df_2015_2019<- df %>% filter(Year!=2020)
+
+ meanLAeqByDayMonthStationAndPeriod_2015_2019 <- df_2015_2019 %>%
+  group_by(DayMonthName, StationName, Period) %>% 
+  summarise(meanLAeqByDayMonth_2015_2019 = mean(LAeq))
+
+head(meanLAeqByDayMonthStationAndPeriod_2015_2019)
+```
+
+Creamos el dataframe para el año 2020 y añadimos el resultado de la media del índice LAeq promediada por tipo de día del mes. Cortamos el dataframe para quedarnos únicamente con los días comprendidos entre los meses marzo-mayo, ambos incluidos. Además, solo nos interesa el Periodo 'T'. 
+```{r}
+
+df2020 <- df %>% filter(Year==2020) %>% filter(Period=='T')
+
+dfCovidEffect <- merge(df2020, meanLAeqByDayMonthStationAndPeriod_2015_2019, by= c("DayMonthName", "StationName", "Period"), x.ALL = True)
+
+dfCovidEffect <- dfCovidEffect %>% filter(Month>2, Month<6) 
+
+dfCovidEffect <- dfCovidEffect[, c('Date', 'StationName','LAeq', 'meanLAeqByDayMonth_2015_2019')]
+
+head(dfCovidEffect)
+
+```
+
+```{r}
+dfCovidEffectMelted <- reshape2::melt(dfCovidEffect, id.var=c('Date', 'StationName'))
+
+```
+
+
+```{r, fig.width=12, fig.height=8}
+
+ggplot(dfCovidEffectMelted, aes(x = Date, y = value, col=variable)) +
+  geom_point(color='black',size=1)  +
+  geom_line()  +
+  facet_wrap(~ StationName, ncol = 3, scales="free") +
+  labs(title = "Comparación del índice de ruido LAeq diario para 2020 y la media de los años 2015-2019",
+       subtitle = "Subtítulo", y = "LAeq") +
+ theme(legend.position="top")
+```
 
