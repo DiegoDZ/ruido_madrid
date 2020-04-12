@@ -1,6 +1,8 @@
 ---
 title: "Explora ruido madrid"
-output: html_notebook
+output:
+  html_notebook: default
+  pdf_document: default
 ---
 
 TODO:
@@ -15,6 +17,7 @@ library(lattice)
 library(latticeExtra)
 library(zoo)
 library(ggplot2)
+library(viridis)
 ```
  
 ```{r}
@@ -26,45 +29,10 @@ df <- df[order(df$Date),]
 head(df)
 ```
 
-# muestra de datos diarios de una estación Leq
-
-```{r}
-xyplot(LAeq~Date|as.factor(Station[1]), groups=Period, df=df[df$Period == "T",], type='l',strip = FALSE)
-```
-
-# Media mensual de todos los años excepto 2020
-```{r}
-df %>%
-  filter(Year != 2020) %>%
-  group_by(Month) %>%
-  summarise(mean_LAeq = mean(LAeq),
-            mean_LAS01 = mean(LAS01),
-            mean_LAS10 = mean(LAS10),
-            mean_LAS50 = mean(LAS50),
-            mean_LAS90 = mean(LAS90),
-            mean_LAS99 = mean(LAS99)) 
-```
-
+# muestra de datos diarios de Leq para todos los periodos.
  
-# Año 2020
 ```{r}
-df %>% 
-  filter(Year == 2020) %>%
-  filter(Period == "T") %>%
-  group_by(Month) %>%
-  summarise(mean_LAeq = mean(LAeq),
-            mean_LAS01 = mean(LAS01),
-            mean_LAS10 = mean(LAS10),
-            mean_LAS50 = mean(LAS50),
-            mean_LAS90 = mean(LAS90),
-            mean_LAS99 = mean(LAS99)) 
-  
-```
-
-
-```{r}
-## número de estaciones
-ns <-  unique(data$Station)
+xyplot(LAeq~Date|as.factor(Station), groups=Period,data=df[df$Period != "T", ], type='l', strip =TRUE,  grid=TRUE, alpha=0.8, par.settings = list(strip.background = list(col = "transparent")))
 ```
 
 Nombre de las estaciones
@@ -74,8 +42,18 @@ names(sdf)[1] <- "Station"
 ```
 
 Uno los dos data frames
+
 ```{r}
 df <- merge(df, sdf, by="Station")
+dft <- df %>%
+    filter(Period != "T") %>%
+    arrange(Date)
+```
+
+
+```{r}
+xyplot(LAeq~Date|V2, groups=Period, allow.multiple=TRUE, data=dft, cex=0.2, grid=TRUE, alpha=0.8, type='b',
+       par.settings = list(strip.background = list(col = "transparent")), auto.key=TRUE)
 ```
 
 ## Gráficas generales:
@@ -88,51 +66,40 @@ theme_set(
   )
 ```
  
-# Media del índice LAeq de todas las estaciones
+# Media del índice LAeq (T) de todas las estaciones
 
 ```{r}
 ## set stations as factor.
 df$Station <-  as.factor(df$Station)
 ```
-
-
+superponer 2020
 ```{r}
 df %>% 
   filter(Year != 2020) %>% ## hago la gráfica con datos hasta 2019
     filter(Period == "T") %>%
     group_by(V2) %>%
     summarise(mean_LAeq = mean(LAeq)) %>%
-    ggplot(aes(y=V2, x=mean_LAeq, color=mean_LAeq)) +
+    ggplot(aes(y=reorder(V2, mean_LAeq, mean),x=mean_LAeq, color=mean_LAeq)) +
     geom_point(cex=3.5) +
     scale_color_viridis(option = "D") +
     labs(y="Estaciones", x = "LAeq")
 ```
 
 
-# Boxplot LAeq de todas las estaciones 
+# Boxplot LAeq (T) de todas las estaciones 
 ```{r}
 ## TO BE IMPROVED
 df %>% 
   filter(Year != 2020) %>% ## hago la gráfica con datos hasta 2019
     filter(Period == "T") %>%
     group_by(V2) %>%
-    ggplot(aes(x=V2, y=LAeq, color=V2)) +
-    geom_boxplot(aes(fill = V2))
-
+    ggplot(aes(x=reorder(V2.x, LAeq, mean), y=LAeq, color=V2)) +
+    geom_violin() + # or geom_boxplot
+    labs(color='Station', x='') +
+    theme(axis.text.x = element_text(angle = 90))
 ```
 
 
-# Todas las estaciones temporal
-```{r}
-## TO BE IMPROVED
-df %>% 
-  filter(Year != 2020) %>% ## hago la gráfica con datos hasta 2019
-    filter(Period == "T") %>%
-    group_by(V2) %>%
-    ggplot(aes(x=Date, y=LAeq, color=V2, alpha=0.3)) +
-    geom_point()
-
-```
 
 Para límites mirar: http://www.madrid.org/bdccm/normativa/PDF/Ruidos%20y%20vibraciones/Compilacion/CPRUID.pdf
 
