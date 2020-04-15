@@ -5,6 +5,22 @@ output:
     html_document: default
 
 ---
+
+Este notebook presenta un análisis del índice de ruido $LA_{eq}^{(i)}$ en la ciudad de Madrid para los años 2015-2019, ambos incluidos, y el año 2020 hasta el mes de mayo. 
+
+(1) En la primera parte se presentan los datos en bruto para las 31 estaciones presentes en la capital. Observaremos que 
+
+(2) En la segunda parte, compararemos la evolución de la media mensual del índice $LA_{eq}$ para las distintas estaciones, permitiéndonos observar un claro descenso en el año 2020 debido a las medidas de aislamiento debidas a la pandemia producida por el COVID-19. Posteriormente, descenderemos a una escala diaria para analizar en detalle el efecto de las distintas etapas del aislamiento sobre el ruido registrado en las distintas estaciones. 
+
+
+i El índice de ruido $LA_{eq}$ es el parámetro acústico aceptado internacionalmente como medida del nivel sonoro continuo equivalente. Este índice representa la contaminación acústica acumulada a lo largo de un periodo de tiempo en el lugar de medición. Puesto que el oído humano es más sensible a las medias frecuencias, se realiza una ponderación de frecuencias, dando menos importancia a las bajas y altas frecuencias frente a las medias, con el fin de establecer una medida del nivel de ruido que soporta el ser humano cercano a la estación de medición. 
+
+
+Análisis realizado por @ClaudiaGues y [@ddzumajo](https://github.com/ddzumajo)
+
+
+Datos: Los datos han sido obtenido del [Portal de datos abiertos del Ayuntamiento de Madrid](https://datos.madrid.es/portal/site/egob/menuitem.c05c1f754a33a9fbe4b2e4b284f1a5a0/?vgnextoid=2ec892874870b410VgnVCM1000000b205a0aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD&vgnextfmt=default).
+
 ```{r}
 library("dplyr")
 library("ggplot2")
@@ -12,10 +28,8 @@ library('gridExtra')
 ```
 
 ```{r}
-Sys.setlocale("LC_TIME")
-
+Sys.setlocale("LC_TIME", "en_US.UTF-8")
 ```
-
 
 ```{r}
 df <- read.csv(file = './data/datos_ruido_madrid.csv', header = FALSE, sep = ';', strip.white = TRUE)
@@ -95,6 +109,7 @@ dfMeanLAeqByMonth$Year <- factor(dfMeanLAeqByMonth$Year)
 
 
 
+
 ```{r, fig.width=12, fig.height=8}
 
 ggplot(dfMeanLAeqByMonth, aes(x = ordered(MonthName,levels=month.name), y = meanLAeqByMonth, group=Year)) +
@@ -144,24 +159,41 @@ dfCovidEffect <- dfCovidEffect %>% filter(Month>2, Month<6)
 
 dfCovidEffect <- dfCovidEffect[, c('Date', 'StationName','LAeq', 'meanLAeqByDayMonth_2015_2019')]
 
+colnames(dfCovidEffect) <- c("Date","StationName","LAeq_2020","LAeq_2015_2019")
+
+
 head(dfCovidEffect)
 
 ```
 
 ```{r}
+
 dfCovidEffectMelted <- reshape2::melt(dfCovidEffect, id.var=c('Date', 'StationName'))
+
+head(dfCovidEffectMelted)
+```
+
+```{r}
+
+colnames(dfCovidEffectMelted)[3] <- "LAeq"
 
 ```
 
 
 ```{r, fig.width=12, fig.height=8}
 
-ggplot(dfCovidEffectMelted, aes(x = Date, y = value, col=variable)) +
+ggplot(dfCovidEffectMelted, aes(x = Date, y = value, col=LAeq)) +
   geom_point(color='black',size=1)  +
   geom_line()  +
+  geom_rect(aes(xmin = as.Date("2020-03-16"), xmax = as.Date("2020-03-30"),ymin = -Inf, ymax = Inf),
+                   fill = "green", alpha = 0.002) +
+  geom_rect(aes(xmin = as.Date("2020-03-30"), xmax = as.Date("2020-04-13"),ymin = -Inf, ymax = Inf),
+                   fill = "red", alpha = 0.002) +
+  geom_rect(aes(xmin = as.Date("2020-04-13"), xmax = as.Date("2020-04-26"),ymin = -Inf, ymax = Inf),
+                   fill = "green", alpha = 0.002) +
   facet_wrap(~ StationName, ncol = 3, scales="free") +
   labs(title = "Comparación del índice de ruido LAeq diario para 2020 y la media de los años 2015-2019",
-       subtitle = "Subtítulo", y = "LAeq") +
+       subtitle = "(La media de los años 2015-2019 ha sido calculada para obtener una semana 'tipo')", y = "LAeq") +
  theme(legend.position="top")
 ```
 
