@@ -10,21 +10,27 @@ Este notebook presenta un análisis del índice de ruido $LA_{eq}^{(i)}$ en la c
 
 (1) En la primera parte se presentan los datos en bruto para las 31 estaciones presentes en la capital. Observaremos que 
 
-(2) En la segunda parte, compararemos la evolución de la media mensual del índice $LA_{eq}$ para las distintas estaciones, permitiéndonos observar un claro descenso en el año 2020 debido a las medidas de aislamiento debidas a la pandemia producida por el COVID-19. Posteriormente, descenderemos a una escala diaria para analizar en detalle el efecto de las distintas etapas del aislamiento sobre el ruido registrado en las distintas estaciones. 
+(2) En la segunda parte, compararemos la evolución de la media mensual del índice $LA_{eq}$ para las distintas estaciones, permitiéndonos observar un claro descenso en el año 2020 debido a las medidas de aislamiento establecidas por la crisis de la pandamia COVID-19. Posteriormente, descenderemos a una escala diaria para analizar en detalle el efecto de las distintas etapas del aislamiento sobre el ruido registrado en las estaciones. 
 
 
 i El índice de ruido $LA_{eq}$ es el parámetro acústico aceptado internacionalmente como medida del nivel sonoro continuo equivalente. Este índice representa la contaminación acústica acumulada a lo largo de un periodo de tiempo en el lugar de medición. Puesto que el oído humano es más sensible a las medias frecuencias, se realiza una ponderación de frecuencias, dando menos importancia a las bajas y altas frecuencias frente a las medias, con el fin de establecer una medida del nivel de ruido que soporta el ser humano cercano a la estación de medición. 
 
 
-Análisis realizado por @ClaudiaGues y [@ddzumajo](https://github.com/ddzumajo)
+Análisis realizado por [ClaudiaGEscribano](https://github.com/ClaudiaGEscribano) y [ddzumajo](https://github.com/ddzumajo)
 
 
-Datos: Los datos han sido obtenido del [Portal de datos abiertos del Ayuntamiento de Madrid](https://datos.madrid.es/portal/site/egob/menuitem.c05c1f754a33a9fbe4b2e4b284f1a5a0/?vgnextoid=2ec892874870b410VgnVCM1000000b205a0aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD&vgnextfmt=default).
+Los datos han sido obtenido del [Portal de datos abiertos del Ayuntamiento de Madrid](https://datos.madrid.es/portal/site/egob/menuitem.c05c1f754a33a9fbe4b2e4b284f1a5a0/?vgnextoid=2ec892874870b410VgnVCM1000000b205a0aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD&vgnextfmt=default).
 
 ```{r}
 library("dplyr")
 library("ggplot2")
-library('gridExtra')
+library("gridExtra")
+library("reshape2")
+library("magrittr")
+library("lattice")
+library("latticeExtra")
+library("zoo")
+library("viridis")
 ```
 
 ```{r}
@@ -32,17 +38,29 @@ Sys.setlocale("LC_TIME", "en_US.UTF-8")
 ```
 
 ```{r}
-df <- read.csv(file = './data/datos_ruido_madrid.csv', header = FALSE, sep = ';', strip.white = TRUE)
-dfs <- read.csv(file = './data/EstacionesMedidaControlAcustico.csv', header = FALSE, sep = ';', strip.white = TRUE, fileEncoding = "ISO-8859-1")
+# Set the minimal set for the graphs
+theme_set(theme_minimal() + theme(legend.position = "top"))
+```
 
+
+```{r}
+
+# Load data
+df <- read.csv(file = './data/datos_ruido_madrid.csv', header = FALSE, sep = ';', strip.white = TRUE)
+
+# Rename columns
 colnames(df) <- c("Station","Year","Month","Day","Period","LAeq","LAS01","LAS10","LAS50","LAS90","LAS99")
 
+# Create column date
 df$Date <- as.Date(with(df, paste(Year, Month, Day,sep="-")), "%Y-%m-%d")
 
+# Create column with the name of the months
 df$MonthName <- months(df$Date)
 
+# Create column with day of week and month. 
 df$DayMonthName <- with(df, paste(weekdays(df$Date), MonthName,sep="-"))
 
+# Delete useless columns
 df$LAS01 <- NULL
 df$LAS10 <- NULL
 df$LAS50 <- NULL
@@ -55,10 +73,13 @@ head(df)
 
 ```{r}
 
+# Load stations file
 dfs <- read.csv(file = './data/EstacionesMedidaControlAcustico.csv', header = TRUE, sep = ',', strip.white = TRUE, fileEncoding = "ISO-8859-1")
 
+# Delete useless columns
 dfs[ ,c('COD_VIA', 'VIA_CLASE','VIA_PAR','VIA_NOMBRE','Dirección','Longitud_gms','Latitud_gms','LATITUD_ED50','LONGITUD_ED50','Alt..m.','Fecha.alta','Coordenada_X_ETRS89','Coordenada_Y_ETRS89','LONGITUD_WGS84','LATITUD_WGS84','X.2','X.3')] <- list(NULL)
 
+# Rename some columns
 dfs <- dfs %>% 
   rename(
     Station=Nº,
@@ -73,32 +94,84 @@ head(dfs)
 
 
 ```{r}
+
+# Merge dataframes
 df <- merge(df, dfs, by = "Station", all.x = TRUE)
+
+# Sort output dataframe
+df <- df[order(df$Date),]
+
 head(df)
 
 ```
 
+A continuación se muestran los registros del índice $LA_{eq}$ medidos por todas las estaciones a lo largo de los años para los distintos periodos. Se observa que durante las noches (N) el índice es inferior en todas la estaciones. Por otro lado, en algunas estaciones apenas hay distinción en el índice de ruido medido en los periodos D y E (mañana y tarde, respectivamente).
 
-Calculamos la media de los índices por año, mes, estación y periodo, y añadimos las variables al dataframe.
+Además, se aprecia con claridad cómo el índice de ruido es estacional (se repite el mismo patrón de año en año), si bien se observan diferencias para el año 2020 debido a las medidas de confinamiento para paliar el efecto de la pandemia COVID-19.
+
+Los picos observados seguramente sean debidos a errores en la medición del ruido. 
+
+```{r, fig.width=5, fig.height=8}
+ggplot(df[df$Period != "T", ], aes(x = Date, y = LAeq, group=Period)) +
+  geom_line(aes(color=Period), alpha=0.8, lwd = 0.3)  +
+  facet_wrap(~ StationName, ncol = 3, scales="free_x") +
+  ylim(30,90) +
+  labs(title = "Evolución del índice LAeq para los periodos día (D), tarde (E) y noche (N)", y = "LAeq") +
+  scale_x_date(date_breaks = "years", date_labels = "%Y")
+```
+
+Realizamos la media del índice $LA_{eq}$ en el periodo T a lo largo de los años 2015-2019 (ambos incluidos) para cada una de las estaciones. De esta manera podemos ver cuáles son las estaciones que generalmente son más ruidosas.
+
+```{r}
+dfToPlot <-df %>% 
+  filter(Year != 2020) %>%
+  filter(Period == "T") %>%
+  group_by(StationName) %>%
+  summarise(mean_LAeq = mean(LAeq))
+
+ggplot(dfToPlot,aes(y=reorder(StationName, mean_LAeq, mean),x=mean_LAeq, color=mean_LAeq)) +
+  geom_point(cex=3.5) +
+  scale_color_viridis(option = "D") +
+  labs(y="Stations", x = "Mean LAeq") +
+  theme(legend.position = "right")
+```
+
+```{r}
+df %>%
+  filter(Year != 2020) %>%
+    filter(Period == "T") %>%
+    group_by(Station) %>%
+  ggplot(aes(x=reorder(StationName, LAeq, mean), y=LAeq)) +
+  geom_violin(trim=FALSE) +
+  geom_boxplot(width=0.2, outlier.shape=NA) +
+  labs(color='Station', x='') +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+
+Después de este análisis general nos centramos únicamente en el periodo T. Comenzaremos calculando la media mensual del índice $LA_{eq}$ para todos los años y estaciones. De esta manera nos permitirá analizar grosso modo las diferencias y similitudes entre los años 2014-2020 (ambos incluidos).
+
 
 ```{r}
 
+# Compute the mean of the index by year, month, station and period
 meanLAeqByMonthStationAndPeriod <- df %>% 
     group_by(Year,MonthName, StationName, Period) %>% 
     summarise(meanLAeqByMonth = mean(LAeq))
 
+# Merge dataframes
 df <- merge(df, meanLAeqByMonthStationAndPeriod, by = c("Year","MonthName", "StationName", "Period"), all.x = TRUE)
-
-colnames(df)
 
 head(df)
 ```
 
-Nos centramos únicamente en el índice LAeq durante el periodo 'T'. Nos interesa conocer la media mensual por año de ese índice para cada una de las estaciones de Madrid. 
 
 ```{r}
+
+# Filter period
  dfPeriodT <- df %>% filter(Period == "T")
 
+# Take only the unique data
 dfMeanLAeqByMonth <- distinct(dfPeriodT, Year, MonthName, StationName, meanLAeqByMonth)
 
 # Year as factor in order to facilitate the choice of colors in the plot
@@ -107,7 +180,12 @@ dfMeanLAeqByMonth$Year <- factor(dfMeanLAeqByMonth$Year)
 ```
 
 
+De la gráfica siguiente se pueden extraer las siguientes conclusiones conclusiones:
 
+1. 
+
+
+2. El año 2020 comenzó como de forma similar al resto de años, sin embargo, a partir de abril, los niveles de ruido descendieron debido a las medidas de confinamiento. 
 
 
 ```{r, fig.width=12, fig.height=8}
@@ -118,7 +196,7 @@ ggplot(dfMeanLAeqByMonth, aes(x = ordered(MonthName,levels=month.name), y = mean
   facet_wrap(~ StationName, ncol = 3, scales="free") +
   labs(title = "Comparación del índice LAeq medido en las distintas estaciones a lo largo de los años",
        subtitle = "Se ha realizado la media mensual de los datos recopilados en cada una de las estaciones",
-       y = "Media mensual LAeq") +
+       y = "Monthly mean LAeq", x = 'Month') +
  theme(legend.position="top")
 ```
 
@@ -131,6 +209,7 @@ Para ello crearemos obtendremos los promedios diarios de los índices de los añ
 2. Construiremos un mes "típico" para compararlo con el mes correspondiente de 2020. 
 
 3. El efecto de Madrid central observado en la gráfica anterior no va a ser tenido en cuenta ya que vamos a promediar sobre todos los años previos al de la crisis del coronavirus. 
+
 ```{r}
 head(df)
 ```
@@ -149,6 +228,7 @@ head(meanLAeqByDayMonthStationAndPeriod_2015_2019)
 ```
 
 Creamos el dataframe para el año 2020 y añadimos el resultado de la media del índice LAeq promediada por tipo de día del mes. Cortamos el dataframe para quedarnos únicamente con los días comprendidos entre los meses marzo-mayo, ambos incluidos. Además, solo nos interesa el Periodo 'T'. 
+
 ```{r}
 
 df2020 <- df %>% filter(Year==2020) %>% filter(Period=='T')
@@ -168,6 +248,7 @@ head(dfCovidEffect)
 
 ```{r}
 
+# Melt the dataframe in order to obtain anot
 dfCovidEffectMelted <- reshape2::melt(dfCovidEffect, id.var=c('Date', 'StationName'))
 
 head(dfCovidEffectMelted)
@@ -175,9 +256,12 @@ head(dfCovidEffectMelted)
 
 ```{r}
 
+# Renamce third column name
 colnames(dfCovidEffectMelted)[3] <- "LAeq"
 
 ```
+
+Como se aprecia en la gráfica siguiente, el efecto del confinamiento ha tenido como resultado un claro descenso de los niveles de ruido en todas las estaciones de Madrid. 
 
 
 ```{r, fig.width=12, fig.height=8}
