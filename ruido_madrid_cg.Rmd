@@ -106,3 +106,22 @@ Para límites mirar: http://www.madrid.org/bdccm/normativa/PDF/Ruidos%20y%20vibr
 área tolerablemente ruidosa: 65/70 diurno (60 nocturno)
 área ruidosa: 70/75 diurno (70 nocturno)
 
+# Create a map to display mean LAeq of each staion
+
+```{r}
+library(rgdal)
+library(ggmap)
+## Using ggmap
+## 1st display the geographical data without the map:
+
+## nombro las columnas de lat y long
+df <-  df %>%
+    rename(long = V18,
+           lat = V19)
+
+## hay problemas con la longitud. Al leer sdf, como hay columnas que contienen " aparecen rpoblemas porque las columans de algunas filas se desplazan.
+qmplot(x=long, y=lat, data=df, pch=21, col='black', zoom=14, source="google")
+
+
+```
+
