@@ -1,0 +1,127 @@
+---
+title: "Explora ruido madrid"
+output:
+  html_notebook: default
+  pdf_document: default
+---
+
+TODO:
+- promediar mensualmente LeqT para todos los años y comparar con 2020.
+- Estaría bien crear una semana tipo promediada para todos los años que tenemos datos. En este caso habría que tener cuidado en promediar lunes-lunes, martes-martes...
+ 
+```{r}
+library(dplyr)
+library(reshape2)
+library(magrittr)
+library(lattice)
+library(latticeExtra)
+library(zoo)
+library(ggplot2)
+library(viridis)
+```
+ 
+```{r}
+df <- read.csv("data/datos_ruido_madrid.csv", sep=";", strip.white = TRUE)
+colnames(df) <- c("Station","Year","Month","Day","Period","LAeq","LAS01","LAS10","LAS50","LAS90","LAS99")
+df$Date <- as.Date(with(df, paste(Year, Month, Day, 
+                                      sep="-")), "%Y-%m-%d")
+df <- df[order(df$Date),]
+head(df)
+```
+
+# muestra de datos diarios de Leq para todos los periodos.
+ 
+```{r}
+xyplot(LAeq~Date|as.factor(Station), groups=Period,data=df[df$Period != "T", ], type='l', strip =TRUE,  grid=TRUE, alpha=0.8, par.settings = list(strip.background = list(col = "transparent")))
+```
+
+Nombre de las estaciones
+```{r}
+sdf <- read.csv("data/EstacionesMedidaControlAcustico.csv", header=FALSE, sep=",", fileEncoding="ISO-8859-1")
+names(sdf)[1] <- "Station"
+```
+
+Uno los dos data frames
+
+```{r}
+df <- merge(df, sdf, by="Station")
+dft <- df %>%
+    filter(Period != "T") %>%
+    arrange(Date)
+```
+
+
+```{r}
+xyplot(LAeq~Date|V2, groups=Period, allow.multiple=TRUE, data=dft, cex=0.2, grid=TRUE, alpha=0.8, type='b',
+       par.settings = list(strip.background = list(col = "transparent")), auto.key=TRUE)
+```
+
+## Gráficas generales:
+
+```{r}
+## set the minimal set for the graphs
+theme_set(
+  theme_minimal() +
+    theme(legend.position = "right")
+  )
+```
+ 
+# Media del índice LAeq (T) de todas las estaciones
+
+```{r}
+## set stations as factor.
+df$Station <-  as.factor(df$Station)
+```
+superponer 2020
+```{r}
+df %>% 
+  filter(Year != 2020) %>% ## hago la gráfica con datos hasta 2019
+    filter(Period == "T") %>%
+    group_by(V2) %>%
+    summarise(mean_LAeq = mean(LAeq)) %>%
+    ggplot(aes(y=reorder(V2, mean_LAeq, mean),x=mean_LAeq, color=mean_LAeq)) +
+    geom_point(cex=3.5) +
+    scale_color_viridis(option = "D") +
+    labs(y="Estaciones", x = "LAeq")
+```
+
+
+# Boxplot LAeq (T) de todas las estaciones 
+```{r}
+## TO BE IMPROVED
+df %>% 
+  filter(Year != 2020) %>% ## hago la gráfica con datos hasta 2019
+    filter(Period == "T") %>%
+    group_by(V2) %>%
+    ggplot(aes(x=reorder(V2.x, LAeq, mean), y=LAeq, color=V2)) +
+    geom_violin() + # or geom_boxplot
+    labs(color='Station', x='') +
+    theme(axis.text.x = element_text(angle = 90))
+```
+
+
+
+Para límites mirar: http://www.madrid.org/bdccm/normativa/PDF/Ruidos%20y%20vibraciones/Compilacion/CPRUID.pdf
+
+área tolerablemente ruidosa: 65/70 diurno (60 nocturno)
+área ruidosa: 70/75 diurno (70 nocturno)
+
+# Create a map to display mean LAeq of each staion
+
+```{r}
+library(rgdal)
+library(ggmap)
+## Using ggmap
+## 1st display the geographical data without the map:
+
+## nombro las columnas de lat y long
+df <-  df %>%
+    rename(long = V18,
+           lat = V19)
+
+## hay problemas con la longitud. Al leer sdf, como hay columnas que contienen " aparecen rpoblemas porque las columans de algunas filas se desplazan.
+qmplot(x=long, y=lat, data=df, pch=21, col='black', zoom=14, source="google")
+
+
+```
+
